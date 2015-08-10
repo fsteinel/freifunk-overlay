@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+<maintainer>
+<email>fsteinel@flonet.net</email>
+<name>Florian Steinel</name>
+</maintainer>
+  <upstream>
+		<maintainer>
+			<email>mschiffer@universe-factory.net</email>
+			<name>Matthias Schiffer</name>
+			<description>Upstream author</description>
+		</maintainer>
+    <bugs-to>https://projects.universe-factory.net/projects/fastd/issues</bugs-to>
+  </upstream>
+</pkgmetadata>
+

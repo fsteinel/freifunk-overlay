@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+<maintainer>
+<email>fsteinel@flonet.net</email>
+<name>Florian Steinel</name>
+</maintainer>
+  <upstream>
+		<maintainer>
+			<email>sw@simonwunderlich.de</email>
+			<name>Simon Wunderlich</name>
+			<description>Upstream author</description>
+		</maintainer>
+		<maintainer>
+			<email>sven@open-mesh.com</email>
+			<name>Sven Eckelmann</name>
+			<description>Upstream author</description>
+		</maintainer>
+		<maintainer>
+			<email>mareklindner@neomailbox.ch</email>
+			<name>Marek Lindner</name>
+			<description>Upstream author</description>
+		</maintainer>
+		<maintainer>
+			<email>b.a.t.m.a.n@lists.open-mesh.org</email>
+			<name>Mailing List</name>
+		</maintainer>
+    <bugs-to>https://www.open-mesh.org/projects/batctl/issues</bugs-to>
+	<changelog>http://git.open-mesh.org/batctl.git/shortlog</changelog>
+  </upstream>
+</pkgmetadata>
+

@@ -1,0 +1,73 @@
+#!/sbin/runscript
+# Copyright 1999-2011 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+#extra_started_commands="buffer unbuffer"
+
+: ${FASTD_CONFIG:=/etc/fastd/${SVCNAME}.config}
+: ${FASTD_PIDFILE:=/var/run/${SVCNAME}.pid}
+: ${FASTD_BINARY:=/usr/bin/fastd}
+: ${FASTD_OPTS:="-c ${FASTD_CONFIG}"}
+
+depend() {
+	use clock hostname
+	after bootmisc
+}
+
+ssd() { 
+	start-stop-daemon --exec /usr/bin/fastd \
+		--pidfile "${FASTD_PIDFILE}" "$@" ;
+}
+
+checkconfig() {
+	if [ ! -d /var/empty ] ; then
+		mkdir -p /var/empty || return 1
+	fi
+
+	if [ ! -e "${FASTD_CONFIG}" ] ; then
+		eerror "You need an ${FASTD_CONFIG} file to run fastd"
+		eerror "There is a sample file in /usr/share/doc/${SVCNAME}"
+		return 1
+	fi
+
+	#[ "${FASTD_CONFIG}" != "/etc/fastd/fastd.config" ] \
+		#&& 
+	#FASTD_OPTS="${FASTD_OPTS} -c ${FASTD_CONFIG}"
+
+	if [ ! -e "${FASTD_CONFIG}.key" ] ; then
+		secret=$("${FASTD_BINARY}" --generate-key --machine-readable)
+		if [ "${secret}" != "" ] ; then
+			echo "secret \"${secret}\";" > "${FASTD_CONFIG}.key"
+		else
+			secret=""
+			rm "${FASTD_CONFIG}.key"
+		fi
+		if [ -e "${FASTD_CONFIG}.key" ] ; then
+			public=$("${FASTD_BINARY}" -c "${FASTD_CONFIG}.key" --show-key --machine-readable)
+			if [ "${public}" != "" ] ; then
+				einfo "Public Key:\n${public}\n"
+			else
+				ewarn "Error can not get Public Key from ${FASTD_CONFIG}.key\n"
+			fi
+		fi
+	fi
+
+	"${FASTD_BINARY}" --verify-config ${FASTD_OPTS} || return 1
+}
+
+start() {
+	FASTD_OPTS="${FASTD_OPTS} --pid-file ${FASTD_PIDFILE}"
+	checkconfig || return 1
+
+	ebegin "Starting ${SVCNAME}"
+	ssd --start \
+	    -- -d ${FASTD_OPTS}
+	eend $?
+}
+
+stop() {
+	ebegin "Stopping fastd"
+	ssd --stop
+	eend $?
+}

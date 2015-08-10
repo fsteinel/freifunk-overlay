@@ -1,0 +1,33 @@
+From 2e7cc9111d03383cb11a02437775fdb444dfd090 Mon Sep 17 00:00:00 2001
+From: Daniel Ehlers <danielehlers@mindeye.net>
+Date: Sat, 8 Aug 2015 20:50:43 +0200
+Subject: [PATCH 1/2] batman-adv: Init and use batman interface with correct
+ netns.
+
+We shall _not_ move composed interfaces between network namespaces.
+Should fix issue #179, though I only tested it in a pure netns enviroment
+and not in a more complex lxc setup.
+
+Signed-off-by: Daniel Ehlers <danielehlers@mindeye.net>
+Signed-off-by: Benny Baumann <BenBE@geshi.org>
+Signed-off-by: Florian Steinel <fsteinel@flonet.net>
+---
+ net/batman-adv/soft-interface.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/net/batman-adv/soft-interface.c b/net/batman-adv/soft-interface.c
+index 51cda3a..bf52f6d 100644
+--- a/net/batman-adv/soft-interface.c
++++ b/net/batman-adv/soft-interface.c
+@@ -940,7 +940,7 @@ static void batadv_softif_init_early(struct net_device *dev)
+ 
+ 	dev->netdev_ops = &batadv_netdev_ops;
+ 	dev->destructor = batadv_softif_free;
+-	dev->features |= NETIF_F_HW_VLAN_CTAG_FILTER;
++	dev->features |= NETIF_F_HW_VLAN_CTAG_FILTER | NETIF_F_NETNS_LOCAL;
+ 	dev->tx_queue_len = 0;
+ 
+ 	/* can't call min_mtu, because the needed variables
+-- 
+2.1.0
+

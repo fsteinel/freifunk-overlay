@@ -1,0 +1,191 @@
+From 3e96e123773756edf3b0363cd3907443a072a12b Mon Sep 17 00:00:00 2001
+From: Daniel Ehlers <danielehlers@mindeye.net>
+Date: Sat, 8 Aug 2015 21:23:50 +0200
+Subject: [PATCH 2/2] batman-adv: Restrict movement of batman interfaces
+ between netns.
+
+Enables us to use batman-adv inside of network namespaces.
+Unfortunately it does not enable us to use multiple batX interfaces
+in different namespaces. This limitation results from using
+debugfs and its unawareness of namespaces.
+
+Signed-off-by: Daniel Ehlers <danielehlers@mindeye.net>
+Signed-off-by: Benny Baumann <BenBE@geshi.org>
+Signed-off-by: Florian Steinel <fsteinel@flonet.net>
+---
+ net/batman-adv/hard-interface.c    | 9 +++++----
+ net/batman-adv/hard-interface.h    | 2 +-
+ net/batman-adv/soft-interface.c    | 8 ++++++--
+ net/batman-adv/soft-interface.h    | 2 +-
+ net/batman-adv/sysfs.c             | 4 +++-
+ net/batman-adv/translation-table.c | 3 ++-
+ 6 files changed, 18 insertions(+), 10 deletions(-)
+
+diff --git a/net/batman-adv/hard-interface.c b/net/batman-adv/hard-interface.c
+index f4a15d2..c812b35 100644
+--- a/net/batman-adv/hard-interface.c
++++ b/net/batman-adv/hard-interface.c
+@@ -90,6 +90,7 @@ out:
+ static bool batadv_is_on_batman_iface(const struct net_device *net_dev)
+ {
+ 	struct net_device *parent_dev;
++	struct net *net = dev_net(net_dev);
+ 	bool ret;
+ 
+ 	/* check if this is a batman-adv mesh interface */
+@@ -102,7 +103,7 @@ static bool batadv_is_on_batman_iface(const struct net_device *net_dev)
+ 		return false;
+ 
+ 	/* recurse over the parent device */
+-	parent_dev = __dev_get_by_index(&init_net, dev_get_iflink(net_dev));
++	parent_dev = __dev_get_by_index(net, dev_get_iflink(net_dev));
+ 	/* if we got a NULL parent_dev there is something broken.. */
+ 	if (WARN(!parent_dev, "Cannot find parent device"))
+ 		return false;
+@@ -380,7 +381,7 @@ static int batadv_master_del_slave(struct batadv_hard_iface *slave,
+ }
+ 
+ int batadv_hardif_enable_interface(struct batadv_hard_iface *hard_iface,
+-				   const char *iface_name)
++				   struct net *net, const char *iface_name)
+ {
+ 	struct batadv_priv *bat_priv;
+ 	struct net_device *soft_iface, *master;
+@@ -394,10 +395,10 @@ int batadv_hardif_enable_interface(struct batadv_hard_iface *hard_iface,
+ 	if (!atomic_inc_not_zero(&hard_iface->refcount))
+ 		goto out;
+ 
+-	soft_iface = dev_get_by_name(&init_net, iface_name);
++	soft_iface = dev_get_by_name(net, iface_name);
+ 
+ 	if (!soft_iface) {
+-		soft_iface = batadv_softif_create(iface_name);
++		soft_iface = batadv_softif_create(net, iface_name);
+ 
+ 		if (!soft_iface) {
+ 			ret = -ENOMEM;
+diff --git a/net/batman-adv/hard-interface.h b/net/batman-adv/hard-interface.h
+index 5a31420..4ed737f 100644
+--- a/net/batman-adv/hard-interface.h
++++ b/net/batman-adv/hard-interface.h
+@@ -55,7 +55,7 @@ bool batadv_is_wifi_iface(int ifindex);
+ struct batadv_hard_iface*
+ batadv_hardif_get_by_netdev(const struct net_device *net_dev);
+ int batadv_hardif_enable_interface(struct batadv_hard_iface *hard_iface,
+-				   const char *iface_name);
++				   struct net *net, const char *iface_name);
+ void batadv_hardif_disable_interface(struct batadv_hard_iface *hard_iface,
+ 				     enum batadv_hard_if_cleanup autodel);
+ void batadv_hardif_remove_interfaces(void);
+diff --git a/net/batman-adv/soft-interface.c b/net/batman-adv/soft-interface.c
+index bf52f6d..1833359 100644
+--- a/net/batman-adv/soft-interface.c
++++ b/net/batman-adv/soft-interface.c
+@@ -46,6 +46,7 @@
+ #include <linux/string.h>
+ #include <linux/types.h>
+ #include <linux/workqueue.h>
++#include <net/net_namespace.h>
+ 
+ #include "bridge_loop_avoidance.h"
+ #include "debugfs.h"
+@@ -853,13 +854,14 @@ static int batadv_softif_slave_add(struct net_device *dev,
+ 				   struct net_device *slave_dev)
+ {
+ 	struct batadv_hard_iface *hard_iface;
++	struct net *net = dev_net(dev);
+ 	int ret = -EINVAL;
+ 
+ 	hard_iface = batadv_hardif_get_by_netdev(slave_dev);
+ 	if (!hard_iface || hard_iface->soft_iface)
+ 		goto out;
+ 
+-	ret = batadv_hardif_enable_interface(hard_iface, dev->name);
++	ret = batadv_hardif_enable_interface(hard_iface, net, dev->name);
+ 
+ out:
+ 	if (hard_iface)
+@@ -958,7 +960,7 @@ static void batadv_softif_init_early(struct net_device *dev)
+ 	memset(priv, 0, sizeof(*priv));
+ }
+ 
+-struct net_device *batadv_softif_create(const char *name)
++struct net_device *batadv_softif_create(struct net *net, const char *name)
+ {
+ 	struct net_device *soft_iface;
+ 	int ret;
+@@ -968,6 +970,8 @@ struct net_device *batadv_softif_create(const char *name)
+ 	if (!soft_iface)
+ 		return NULL;
+ 
++	dev_net_set(soft_iface, net);
++
+ 	soft_iface->rtnl_link_ops = &batadv_link_ops;
+ 
+ 	ret = register_netdevice(soft_iface);
+diff --git a/net/batman-adv/soft-interface.h b/net/batman-adv/soft-interface.h
+index 578e8a6..b4cc34a 100644
+--- a/net/batman-adv/soft-interface.h
++++ b/net/batman-adv/soft-interface.h
+@@ -33,7 +33,7 @@ int batadv_skb_head_push(struct sk_buff *skb, unsigned int len);
+ void batadv_interface_rx(struct net_device *soft_iface,
+ 			 struct sk_buff *skb, struct batadv_hard_iface *recv_if,
+ 			 int hdr_size, struct batadv_orig_node *orig_node);
+-struct net_device *batadv_softif_create(const char *name);
++struct net_device *batadv_softif_create(struct net *net, const char *name);
+ void batadv_softif_destroy_sysfs(struct net_device *soft_iface);
+ int batadv_softif_is_valid(const struct net_device *net_dev);
+ extern struct rtnl_link_ops batadv_link_ops;
+diff --git a/net/batman-adv/sysfs.c b/net/batman-adv/sysfs.c
+index d6a312a..d94d883 100644
+--- a/net/batman-adv/sysfs.c
++++ b/net/batman-adv/sysfs.c
+@@ -36,6 +36,7 @@
+ #include <linux/stddef.h>
+ #include <linux/string.h>
+ #include <linux/stringify.h>
++#include <net/net_namespace.h>
+ 
+ #include "distributed-arp-table.h"
+ #include "gateway_client.h"
+@@ -773,6 +774,7 @@ static ssize_t batadv_store_mesh_iface(struct kobject *kobj,
+ 				       size_t count)
+ {
+ 	struct net_device *net_dev = batadv_kobj_to_netdev(kobj);
++	struct net *net = dev_net(net_dev);
+ 	struct batadv_hard_iface *hard_iface;
+ 	int status_tmp = -1;
+ 	int ret = count;
+@@ -816,7 +818,7 @@ static ssize_t batadv_store_mesh_iface(struct kobject *kobj,
+ 		batadv_hardif_disable_interface(hard_iface,
+ 						BATADV_IF_CLEANUP_AUTO);
+ 
+-	ret = batadv_hardif_enable_interface(hard_iface, buff);
++	ret = batadv_hardif_enable_interface(hard_iface, net, buff);
+ 
+ unlock:
+ 	rtnl_unlock();
+diff --git a/net/batman-adv/translation-table.c b/net/batman-adv/translation-table.c
+index 7986ec5..82c6395 100644
+--- a/net/batman-adv/translation-table.c
++++ b/net/batman-adv/translation-table.c
+@@ -532,6 +532,7 @@ bool batadv_tt_local_add(struct net_device *soft_iface, const uint8_t *addr,
+ 	struct batadv_tt_global_entry *tt_global = NULL;
+ 	struct batadv_softif_vlan *vlan;
+ 	struct net_device *in_dev = NULL;
++	struct net *net = dev_net(soft_iface);
+ 	struct hlist_head *head;
+ 	struct batadv_tt_orig_list_entry *orig_entry;
+ 	int hash_added, table_size, packet_size_max;
+@@ -540,7 +541,7 @@ bool batadv_tt_local_add(struct net_device *soft_iface, const uint8_t *addr,
+ 	uint32_t match_mark;
+ 
+ 	if (ifindex != BATADV_NULL_IFINDEX)
+-		in_dev = dev_get_by_index(&init_net, ifindex);
++		in_dev = dev_get_by_index(net, ifindex);
+ 
+ 	tt_local = batadv_tt_local_hash_find(bat_priv, addr, vid);
+ 
+-- 
+2.1.0
+
